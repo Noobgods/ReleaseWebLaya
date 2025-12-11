@@ -172,6 +172,7 @@
       }
       const spineNode = new Laya.Sprite();
       const spineRender = spineNode.addComponent(Laya.Spine2DRenderNode);
+      spineRender.useFastRender = false;
       spineRender.templet = templet;
       const randomX = 100 + Math.random() * (Laya.stage.width - 500);
       const randomY = 50 + Math.random() * (Laya.stage.height - 300);
