@@ -91,16 +91,24 @@
       this.isDragging = false;
     }
     onAwake() {
+      this.counterInput.prompt = "숫자 입력";
+      this.counterInput.restrict = "0-9";
+      this.counterInput.maxChars = 3;
       this.createTextsLabel();
       Laya.timer.frameLoop(1, this, this.onUpdate);
-      this.createBtn.on(Laya.Event.CLICK, this, this.onCreateSpine);
+      this.spineBtn.on(Laya.Event.CLICK, this, this.onCreateSpine, ["hero_4169"]);
+      this.createBtn.on(Laya.Event.CLICK, this, () => this.onCreateSpine());
       this.deleteBtn.on(Laya.Event.CLICK, this, this.onDeleteSpine);
       this.spineContainer = new Laya.Sprite();
       this.addChild(this.spineContainer);
       Laya.stage.on(Laya.Event.MOUSE_MOVE, this, this.onMouseMove);
       Laya.stage.on(Laya.Event.MOUSE_UP, this, this.onMouseUp);
+      Laya.Stat.show();
     }
     onDisable() {
+      if (this.spineBtn) {
+        this.spineBtn.off(Laya.Event.CLICK, this, this.onCreateSpine);
+      }
       if (this.createBtn) {
         this.createBtn.off(Laya.Event.CLICK, this, this.onCreateSpine);
       }
@@ -114,21 +122,13 @@
       Laya.timer.clear(this, this.onUpdate);
     }
     onUpdate() {
-      this.fpsLabel.text = `FPS: ${Laya.Stat.FPS}`;
     }
     createTextsLabel() {
-      this.fpsLabel = new Laya.Text();
-      this.fpsLabel.fontSize = 24;
-      this.fpsLabel.color = "#00ff00";
-      this.fpsLabel.padding = [5, 10, 5, 10];
-      this.fpsLabel.pos(10, 10);
-      this.fpsLabel.text = "FPS: 0";
-      this.addChild(this.fpsLabel);
       this.countLabel = new Laya.Text();
       this.countLabel.fontSize = 24;
       this.countLabel.color = "#ffff00ff";
       this.countLabel.padding = [5, 10, 5, 10];
-      this.countLabel.pos(10, 50);
+      this.countLabel.pos(10, this.stage.height - 50);
       this.countLabel.text = "Count: 0";
       this.updateCountLabel();
       this.addChild(this.countLabel);
@@ -155,74 +155,98 @@
     // 마우스 업 (드래그 종료)
     onMouseUp() {
       if (this.isDragging && this.selectedSpine) {
-        this.updateSpineZOrder(this.selectedSpine);
+        const spineRender = this.selectedSpine.getComponent(Laya.Spine2DRenderNode);
+        const height = spineRender.templet.height * this.selectedSpine.scaleY;
+        this.updateSpineZOrder(this.selectedSpine, height);
         console.log("드래그 종료");
       }
       this.isDragging = false;
       this.selectedSpine = null;
     }
-    onCreateSpine() {
-      const randomIndex = Math.floor(Math.random() * this.heroList.length);
-      const heroName = this.heroList[randomIndex];
-      const spinePath = `resources/spines/${heroName}/${heroName}.skel`;
-      const templet = Laya.loader.getRes(spinePath);
-      if (!templet) {
-        console.log(`스파인 템플릿을 찾을 수 없습니다. : ${spinePath}`);
+    onCreateSpine(heroName) {
+      const value = this.checkInputNumber();
+      if (value == null)
         return;
-      }
-      const spineNode = new Laya.Sprite();
-      const spineRender = spineNode.addComponent(Laya.Spine2DRenderNode);
-      spineRender.useFastRender = false;
-      spineRender.templet = templet;
-      const randomX = 100 + Math.random() * (Laya.stage.width - 500);
-      const randomY = 50 + Math.random() * (Laya.stage.height - 300);
-      spineNode.pos(randomX, randomY);
-      spineNode.scale(0.1, 0.1);
-      spineNode.mouseEnabled = true;
-      spineNode.on(Laya.Event.MOUSE_DOWN, this, (e) => {
-        const localX = e.stageX - spineNode.x;
-        const localY = e.stageY - spineNode.y;
-        const realX = localX / spineNode.scaleX;
-        const realY = localY / spineNode.scaleY;
-        console.log(`클릭 로컬 좌표: (${realX}, ${realY})`);
-      });
-      spineNode.on(Laya.Event.MOUSE_DOWN, this, this.onSpineMouseDown, [spineNode]);
-      try {
-        spineRender.play("idle", true);
-      } catch (e) {
-        const animCount = spineRender.getAnimNum();
-        if (animCount > 0) {
-          const firstAnim = spineRender.getAniNameByIndex(0);
-          spineRender.play(firstAnim, true);
+      for (let i = 0; i < value; i++) {
+        const name = heroName != null ? heroName : this.getRandomHero();
+        const fastRender = false;
+        const spinePath = `resources/spines/${name}/${name}.skel`;
+        const templet = Laya.loader.getRes(spinePath);
+        if (!templet) {
+          console.log(`스파인 템플릿을 찾을 수 없습니다. : ${spinePath}`);
+          return;
         }
+        const spineNode = new Laya.Sprite();
+        const spineRender = spineNode.addComponent(Laya.Spine2DRenderNode);
+        spineRender.useFastRender = fastRender;
+        spineRender.templet = templet;
+        const randomX = 100 + Math.random() * (Laya.stage.width - 500);
+        const randomY = 50 + Math.random() * (Laya.stage.height - 300);
+        spineNode.pos(randomX, randomY);
+        spineNode.scale(0.1, 0.1);
+        spineNode.mouseEnabled = true;
+        spineNode.on(Laya.Event.MOUSE_DOWN, this, this.onSpineMouseDown, [spineNode]);
+        try {
+          spineRender.play("idle", true);
+        } catch (e) {
+          const animCount = spineRender.getAnimNum();
+          if (animCount > 0) {
+            const firstAnim = spineRender.getAniNameByIndex(0);
+            spineRender.play(firstAnim, true);
+          }
+        }
+        this.spineContainer.addChild(spineNode);
+        this.spineNodes.push(spineNode);
+        this.updateSpineZOrder(spineNode, templet.height * 0.1);
+        const shadowSlot = spineRender.getSlotByName("shadow");
+        const bone = shadowSlot.bone;
+        const areaPosX = bone.worldX - randomX;
+        const areaPosY = -bone.worldY - randomY - templet.height;
+        spineNode.hitArea = new Laya.Rectangle(areaPosX, 100, 1e3, templet.height - 100);
+        console.log(`${name} 생성! 총 ${this.spineNodes.length}개`);
       }
-      this.spineContainer.addChild(spineNode);
-      this.spineNodes.push(spineNode);
-      this.updateSpineZOrder(spineNode);
-      const shadowSlot = spineRender.getSlotByName("shadow");
-      const bone = shadowSlot.bone;
-      spineNode.hitArea = new Laya.Rectangle(bone.worldX - randomX, -bone.worldY - randomY - 2e3, 1e3, 2e3);
-      console.log(`${heroName} 생성! 총 ${this.spineNodes.length}개`);
       this.updateCountLabel();
     }
     onDeleteSpine() {
-      if (this.spineNodes.length === 0) {
-        console.log("삭제할 캐릭터가 없습니다!");
+      const value = this.checkInputNumber();
+      if (value == null)
         return;
+      for (let i = 0; i < value; i++) {
+        if (this.spineNodes.length === 0) {
+          console.log("삭제할 캐릭터가 없습니다!");
+          return;
+        }
+        const randomIndex = Math.floor(Math.random() * this.spineNodes.length);
+        const targetNode = this.spineNodes[randomIndex];
+        targetNode.off(Laya.Event.MOUSE_DOWN, this, this.onSpineMouseDown);
+        this.spineNodes.splice(randomIndex, 1);
+        targetNode.destroy();
       }
-      const randomIndex = Math.floor(Math.random() * this.spineNodes.length);
-      const targetNode = this.spineNodes[randomIndex];
-      targetNode.off(Laya.Event.MOUSE_DOWN, this, this.onSpineMouseDown);
-      this.spineNodes.splice(randomIndex, 1);
-      targetNode.destroy();
       console.log(`캐릭터 삭제! 남은 수: ${this.spineNodes.length}`);
       this.updateCountLabel();
     }
     updateCountLabel() {
       this.countLabel.text = `Count: ${this.spineNodes.length}`;
     }
-    updateSpineZOrder(spine) {
-      spine.zOrder = spine.y;
+    updateSpineZOrder(spine, height) {
+      spine.zOrder = spine.y + height;
+    }
+    checkInputNumber() {
+      const input = this.counterInput.text.trim();
+      if (input === "") {
+        console.log("숫자를 입력하세요.");
+        return null;
+      }
+      const value = Number(input);
+      if (Number.isNaN(value)) {
+        console.log("유효한 숫자가 아닙니다.");
+        return null;
+      }
+      return value;
+    }
+    getRandomHero() {
+      const idx = Math.floor(Math.random() * this.heroList.length);
+      return this.heroList[idx];
     }
   };
   BenchmarkRT = __decorateClass([
